@@ -1,16 +1,22 @@
 /** @jsxImportSource frog/jsx */
 
-import { Box, Heading, Text, VStack, vars } from "@/app/ui";
+import { vars } from "@/app/ui";
 import { Button, Frog, TextInput } from "frog";
 import { devtools } from "frog/dev";
 // import { neynar } from 'frog/hubs'
 import ConstantFlowAgreementV1ABI from "@/app/abis/ConstantFlowAgreementV1ABI";
 import configuration, { Address } from "@/app/configuration";
+import Battle from "@/app/frames/Battle";
+import Challenge from "@/app/frames/Challenge";
+import Error from "@/app/frames/Error";
+import Intro from "@/app/frames/Intro";
+import Stream from "@/app/frames/Stream";
 import {
   AirStackUser,
   fetchPlayers,
   fetchPlayersByFID,
 } from "@/app/utils/AirStackUtils";
+import { buildShareUrl } from "@/app/utils/WarpcastUtils";
 import { init } from "@airstack/node";
 import { handle } from "frog/next";
 import { serveStatic } from "frog/serve-static";
@@ -43,13 +49,13 @@ const app = new Frog<{ State: State }>({
 // export const runtime = 'edge'
 
 app.frame("/", async (c) => {
-  const { inputText, status, verified, frameData } = c;
+  const { inputText, frameData } = c;
 
   const challengerHandle = inputText;
 
   if (!challengerHandle) {
     return c.res({
-      image: <img src="/intro.png" width="100%" />,
+      image: <Intro />,
       intents: [
         <TextInput placeholder="Enter challenger handle..." />,
         <Button>Challenge!</Button>,
@@ -65,19 +71,10 @@ app.frame("/", async (c) => {
   if (!myData?.userId || !opponentData?.userId) {
     return c.res({
       image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-        >
-          <VStack gap="4">
-            <Heading>Could not find the opponent.</Heading>
-            <Text size="20">
-              Please go back and try to enter a correct handle.
-            </Text>
-          </VStack>
-        </Box>
+        <Error
+          title="Could not find the opponent."
+          content="Please go back and try to enter a correct handle."
+        />
       ),
       intents: [<Button.Reset>Back</Button.Reset>],
     });
@@ -85,28 +82,24 @@ app.frame("/", async (c) => {
 
   return c.res({
     image: (
-      <Box
-        grow
-        alignHorizontal="center"
-        backgroundColor="background"
-        padding="32"
-        fontWeight="700"
-      >
-        <VStack gap="4">
-          <Heading>
-            @{myData?.profileHandle} is going to challenge @
-            {opponentData?.profileHandle}.
-          </Heading>
-          <Text size="20">
-            Once you've both started a stream, the game starts.
-          </Text>
-        </VStack>
-      </Box>
+      <Challenge
+        handle1={myData.profileHandle || ""}
+        handle2={opponentData.profileHandle || ""}
+      />
     ),
     intents: [
       <Button action={`/battle/${myData.userId}:${opponentData.userId}`}>
         Start first Yoink
       </Button>,
+      // TODO: This link will be urlencoded and "&" will turn to &amp;.
+      <Button.Link
+        href={buildShareUrl(
+          opponentData.profileHandle,
+          `${myData.userId}:${opponentData.userId}`
+        )}
+      >
+        Cast battle!
+      </Button.Link>,
       <Button.Reset>Back</Button.Reset>,
     ],
   });
@@ -114,10 +107,14 @@ app.frame("/", async (c) => {
 
 app.frame("/battle/:battleid", async (c) => {
   // TODO: Check if already in game OR just chose the team. If so, show game state.
-  const { buttonValue, status, deriveState, req } = c;
+  const { buttonValue, status, deriveState, frameData, env, req, verified } = c;
+
+  console.log({ status, verified, env, frameData });
 
   const { battleid } = req.param();
   const [player1, player2] = battleid.split(":");
+
+  console.log({ player1, player2 });
 
   // TODO: Fetch your current stream and team for this battle.
   const inGame = false;
@@ -152,24 +149,22 @@ app.frame("/battle/:battleid", async (c) => {
     }
   });
 
+  if (state.teams.length !== 2) {
+    return c.res({
+      image: (
+        <Error title="Could not find the teams." content="Please try again." />
+      ),
+      intents: [<Button>Battle!</Button>],
+    });
+  }
+
   if (!hasStarted) {
     return c.res({
       image: (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            color: "white",
-            fontSize: 40,
-          }}
-        >
-          <div style={{ display: "flex" }}>
-            The challenge is not accepted yet.
-          </div>
-          <div style={{ display: "flex" }}>
-            Anyone can join when both players have started a stream.
-          </div>
-        </div>
+        <Error
+          title="Challenge not accepted yet."
+          content="Anyone can join when both players have started a stream."
+        />
       ),
     });
   }
@@ -181,40 +176,13 @@ app.frame("/battle/:battleid", async (c) => {
 
     if (!teamData) {
       return c.res({
-        image: (
-          <Box
-            grow
-            alignHorizontal="center"
-            backgroundColor="background"
-            padding="32"
-          >
-            <Heading>Match not found.</Heading>
-          </Box>
-        ),
+        image: <Error title="Match not found." content="Please try again." />,
         intents: [<Button.Reset>Back</Button.Reset>],
       });
     }
 
     return c.res({
-      image: (
-        <div
-          style={{
-            display: "flex",
-            flexDirection: "column",
-            color: "white",
-            fontSize: 60,
-          }}
-        >
-          <div style={{ display: "flex" }}>
-            {inGame
-              ? `Update the stream for team @${teamData.profileHandle}`
-              : `Start the stream for team @${teamData.profileHandle}`}
-          </div>
-          <div style={{ display: "flex" }}>
-            Flow rate per week: {state.flowRate}
-          </div>
-        </div>
-      ),
+      image: <Stream flowRate={state.flowRate} />,
       intents: [
         <Button value="inc">+</Button>,
         <Button value="dec">-</Button>,
@@ -224,30 +192,10 @@ app.frame("/battle/:battleid", async (c) => {
     });
   }
 
-  if (state.teams.length !== 2) {
-    return c.res({
-      image: (
-        <Box
-          grow
-          alignHorizontal="center"
-          backgroundColor="background"
-          padding="32"
-        >
-          <VStack gap="4">
-            <Heading>Match not found.</Heading>
-          </VStack>
-        </Box>
-      ),
-      intents: [<Button.Reset>Back</Button.Reset>],
-    });
-  }
-
   return c.res({
-    image: (
-      <div style={{ color: "white", fontSize: 60 }}>Choose your team!</div>
-    ),
+    image: <Battle />,
     intents: state.teams.map((team, index) => (
-      <Button value={`team${index + 1}`}>@{team.profileHandle}</Button>
+      <Button value={`team${index + 1}`}>Join @{team.profileHandle}</Button>
     )),
   });
 });

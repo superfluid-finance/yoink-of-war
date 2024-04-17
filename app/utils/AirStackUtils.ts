@@ -37,9 +37,11 @@ export function fetchPlayersByFID(
   player1?: string,
   player2?: string
 ): Promise<(AirStackUser | undefined)[]> {
-  console.log({ player1, player2 });
   return Promise.all([
     fetchPlayerByFID(player1),
     fetchPlayerByFID(player2),
-  ]).then((results) => results.map((result) => result.data.Socials.Social[0]));
+  ]).then((results) => {
+    console.log("RESULTS", results);
+    return results.map((result) => result.data.Socials.Social[0]);
+  });
 }

@@ -16,6 +16,7 @@ export const {
   colors: {
     background: "#fff",
     text: "#000",
+    red: "#FF0202",
   },
   fonts: {
     default: [
