@@ -9,7 +9,7 @@ const Battle: FC<BattleProps> = ({}) => {
       grow
       alignHorizontal="center"
       backgroundColor="background"
-      backgroundImage="url('http://localhost:3000/battle2.png')"
+      backgroundImage="url('http://localhost:3000/battle.png')"
       backgroundSize="contain"
       padding="32"
       fontWeight="700"
