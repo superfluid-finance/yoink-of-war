@@ -1,0 +1,14 @@
+query FindUserByFID($fid: String!) {
+  Socials(
+    input: {filter: {userId: {_eq: $fid}, dappName: {_eq: farcaster}}, blockchain: ethereum}
+  ) {
+    Social {
+      dappName
+      profileHandle
+      userId
+      connectedAddresses {
+        address
+      }
+    }
+  }
+}

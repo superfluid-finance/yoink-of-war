@@ -11,17 +11,20 @@
     "test": "frog dev"
   },
   "dependencies": {
+    "@airstack/node": "^0.0.6",
     "frog": "latest",
+    "graphql": "^16.8.1",
+    "graphql-tag": "^2.12.6",
     "hono": "^4",
+    "next": "14.1.0",
     "react": "^18",
-    "react-dom": "^18",
-    "next": "14.1.0"
+    "react-dom": "^18"
   },
   "devDependencies": {
-    "typescript": "^5",
     "@types/node": "^20",
     "@types/react": "^18",
     "@types/react-dom": "^18",
+    "typescript": "^5",
     "vercel": "^32.4.1"
   }
 }

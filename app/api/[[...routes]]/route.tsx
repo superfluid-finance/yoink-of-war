@@ -1,14 +1,26 @@
 /** @jsxImportSource frog/jsx */
 
+import { Box, Heading, Text, VStack, vars } from "@/app/ui";
 import { Button, Frog, TextInput } from "frog";
 import { devtools } from "frog/dev";
 // import { neynar } from 'frog/hubs'
+import ConstantFlowAgreementV1ABI from "@/app/abis/ConstantFlowAgreementV1ABI";
+import configuration, { Address } from "@/app/configuration";
+import {
+  AirStackUser,
+  fetchPlayers,
+  fetchPlayersByFID,
+} from "@/app/utils/AirStackUtils";
+import { init } from "@airstack/node";
 import { handle } from "frog/next";
 import { serveStatic } from "frog/serve-static";
 
+init(process.env.AIRSTACK_API_KEY!);
+
 type State = {
-  team?: number;
+  team?: string;
   flowRate: number;
+  teams: [AirStackUser, AirStackUser];
 };
 
 const app = new Frog<{ State: State }>({
@@ -16,96 +28,96 @@ const app = new Frog<{ State: State }>({
   basePath: "/api",
   imageAspectRatio: "1:1",
   imageOptions: { width: 955, height: 955 },
+  ui: { vars },
+
   // Supply a Hub to enable frame verification.
   // hub: neynar({ apiKey: 'NEYNAR_FROG_FM' })
   initialState: {
-    team: undefined,
     flowRate: 1,
+    team: undefined,
+    teams: [],
   },
 });
 
 // Uncomment to use Edge Runtime
 // export const runtime = 'edge'
 
-app.frame("/", (c) => {
+app.frame("/", async (c) => {
   const { inputText, status, verified, frameData } = c;
-  console.log({ verified, frameData, fid: frameData?.fid });
 
-  const challengedFID = inputText;
+  const challengerHandle = inputText;
 
-  console.log({ BATTLEID: `/battle/${challengedFID}` });
+  if (!challengerHandle) {
+    return c.res({
+      image: <img src="/intro.png" width="100%" />,
+      intents: [
+        <TextInput placeholder="Enter challenger handle..." />,
+        <Button>Challenge!</Button>,
+      ],
+    });
+  }
 
-  if (challengedFID) {
+  const [myData, opponentData] = await fetchPlayers(
+    frameData?.fid?.toString(),
+    challengerHandle
+  );
+
+  if (!myData?.userId || !opponentData?.userId) {
     return c.res({
       image: (
-        <div
-          style={{
-            alignItems: "center",
-            background: "white",
-            backgroundSize: "100% 100%",
-            display: "flex",
-            flexDirection: "column",
-            flexWrap: "nowrap",
-            height: "100%",
-            justifyContent: "center",
-            textAlign: "center",
-            width: "100%",
-          }}
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
         >
-          <div
-            style={{
-              fontSize: 60,
-              fontStyle: "normal",
-              letterSpacing: "-0.025em",
-              lineHeight: 1.4,
-              marginTop: 30,
-              padding: "0 120px",
-              whiteSpace: "pre-wrap",
-              display: "flex",
-            }}
-          >
-            You are going to challenge {challengedFID}.<br />
-            <br />
-            Once you've both started a stream, the game starts.
-          </div>
-        </div>
+          <VStack gap="4">
+            <Heading>Could not find the opponent.</Heading>
+            <Text size="20">
+              Please go back and try to enter a correct handle.
+            </Text>
+          </VStack>
+        </Box>
       ),
-      intents: [
-        <Button action={`/battle/${challengedFID}`}>Start first Yoink</Button>,
-        <Button.Reset>Back</Button.Reset>,
-      ],
+      intents: [<Button.Reset>Back</Button.Reset>],
     });
   }
 
   return c.res({
     image: (
-      <div
-        style={{
-          alignItems: "center",
-          background: "white",
-          backgroundSize: "100% 100%",
-          display: "flex",
-          flexDirection: "column",
-          flexWrap: "nowrap",
-          height: "100%",
-          justifyContent: "center",
-          textAlign: "center",
-          width: "100%",
-        }}
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        padding="32"
+        fontWeight="700"
       >
-        <img src="/intro.png" width="100%" />
-      </div>
+        <VStack gap="4">
+          <Heading>
+            @{myData?.profileHandle} is going to challenge @
+            {opponentData?.profileHandle}.
+          </Heading>
+          <Text size="20">
+            Once you've both started a stream, the game starts.
+          </Text>
+        </VStack>
+      </Box>
     ),
     intents: [
-      <TextInput placeholder="Enter challenger FID..." />,
-      <Button>Challenge!</Button>,
+      <Button action={`/battle/${myData.userId}:${opponentData.userId}`}>
+        Start first Yoink
+      </Button>,
+      <Button.Reset>Back</Button.Reset>,
     ],
   });
 });
 
-app.frame("/battle/:battleid", (c) => {
+app.frame("/battle/:battleid", async (c) => {
   // TODO: Check if already in game OR just chose the team. If so, show game state.
-  const { buttonValue, status, deriveState } = c;
+  const { buttonValue, status, deriveState, req } = c;
+
+  const { battleid } = req.param();
+  const [player1, player2] = battleid.split(":");
 
   // TODO: Fetch your current stream and team for this battle.
   const inGame = false;
@@ -113,13 +125,13 @@ app.frame("/battle/:battleid", (c) => {
   // TODO: Check if both people have started streams.
   const hasStarted = true;
 
-  const state = deriveState((previousState) => {
+  const state = await deriveState(async (previousState) => {
     switch (buttonValue) {
       case "team1":
-        previousState.team = 1;
+        previousState.team = player1;
         break;
       case "team2":
-        previousState.team = 2;
+        previousState.team = player2;
         break;
       case "reset":
         previousState.team = undefined;
@@ -130,6 +142,13 @@ app.frame("/battle/:battleid", (c) => {
       case "dec":
         previousState.flowRate = Math.max(1, previousState.flowRate - 1);
         break;
+    }
+
+    if (previousState.teams.length !== 2) {
+      const teamsData = await fetchPlayersByFID(player1, player2);
+      if (!teamsData.includes(undefined)) {
+        previousState.teams = teamsData as [AirStackUser, AirStackUser];
+      }
     }
   });
 
@@ -156,43 +175,96 @@ app.frame("/battle/:battleid", (c) => {
   }
 
   // TODO: If user that was challenged, automatically let them choose a flow rate.
-  if (!inGame && state.team === undefined) {
+
+  if (inGame || state.team) {
+    const teamData = state.teams.find((team) => team.userId === state.team);
+
+    if (!teamData) {
+      return c.res({
+        image: (
+          <Box
+            grow
+            alignHorizontal="center"
+            backgroundColor="background"
+            padding="32"
+          >
+            <Heading>Match not found.</Heading>
+          </Box>
+        ),
+        intents: [<Button.Reset>Back</Button.Reset>],
+      });
+    }
+
     return c.res({
       image: (
-        <div style={{ color: "white", fontSize: 60 }}>Choose your team!</div>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            color: "white",
+            fontSize: 60,
+          }}
+        >
+          <div style={{ display: "flex" }}>
+            {inGame
+              ? `Update the stream for team @${teamData.profileHandle}`
+              : `Start the stream for team @${teamData.profileHandle}`}
+          </div>
+          <div style={{ display: "flex" }}>
+            Flow rate per week: {state.flowRate}
+          </div>
+        </div>
       ),
       intents: [
-        <Button value="team1">Team 1</Button>,
-        <Button value="team2">Team 2</Button>,
+        <Button value="inc">+</Button>,
+        <Button value="dec">-</Button>,
+        <Button value="3">Start stream</Button>,
+        <Button value="reset">Back</Button>,
       ],
+    });
+  }
+
+  if (state.teams.length !== 2) {
+    return c.res({
+      image: (
+        <Box
+          grow
+          alignHorizontal="center"
+          backgroundColor="background"
+          padding="32"
+        >
+          <VStack gap="4">
+            <Heading>Match not found.</Heading>
+          </VStack>
+        </Box>
+      ),
+      intents: [<Button.Reset>Back</Button.Reset>],
     });
   }
 
   return c.res({
     image: (
-      <div
-        style={{
-          display: "flex",
-          flexDirection: "column",
-          color: "white",
-          fontSize: 60,
-        }}
-      >
-        <div style={{ display: "flex" }}>
-          {inGame
-            ? `Update the stream for team ${state.team}`
-            : `Start the stream for team ${state.team}`}
-        </div>
-        <div style={{ display: "flex" }}>
-          Flow rate per week: {state.flowRate}
-        </div>
-      </div>
+      <div style={{ color: "white", fontSize: 60 }}>Choose your team!</div>
     ),
-    intents: [
-      <Button value="inc">+</Button>,
-      <Button value="dec">-</Button>,
-      <Button value="3">Start stream</Button>,
-      <Button value="reset">Back</Button>,
+    intents: state.teams.map((team, index) => (
+      <Button value={`team${index + 1}`}>@{team.profileHandle}</Button>
+    )),
+  });
+});
+
+app.transaction("/start/:address/:flowRate", async (c) => {
+  const { address, flowRate } = c.req.param();
+
+  return c.contract({
+    abi: ConstantFlowAgreementV1ABI,
+    functionName: "createFlow",
+    to: configuration.contracts.ConstantFlowAgreementV1,
+    chainId: "eip155:8453",
+    args: [
+      configuration.contracts.Token,
+      address as Address,
+      BigInt(flowRate),
+      "0x",
     ],
   });
 });

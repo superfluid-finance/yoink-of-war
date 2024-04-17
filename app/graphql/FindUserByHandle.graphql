@@ -1,0 +1,14 @@
+query FindUserByHandle($handle: String!) {
+  Socials(
+    input: {filter: {profileName: {_eq: $handle}, dappName: {_eq: farcaster}}, blockchain: ethereum}
+  ) {
+    Social {
+      dappName
+      profileHandle
+      userId
+      connectedAddresses {
+        address
+      }
+    }
+  }
+}
