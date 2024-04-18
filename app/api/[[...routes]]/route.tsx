@@ -1,16 +1,11 @@
 /** @jsxImportSource frog/jsx */
 
-import { vars } from "@/app/ui";
+import { Box, Heading, Text, VStack, vars } from "@/app/ui";
 import { Button, Frog, TextInput } from "frog";
 import { devtools } from "frog/dev";
 // import { neynar } from 'frog/hubs'
 import ConstantFlowAgreementV1ABI from "@/app/abis/ConstantFlowAgreementV1ABI";
 import configuration, { Address } from "@/app/configuration";
-import Battle from "@/app/frames/Battle";
-import Challenge from "@/app/frames/Challenge";
-import Error from "@/app/frames/Error";
-import Intro from "@/app/frames/Intro";
-import Stream from "@/app/frames/Stream";
 import {
   AirStackUser,
   fetchPlayers,
@@ -20,13 +15,195 @@ import { buildShareUrl } from "@/app/utils/WarpcastUtils";
 import { init } from "@airstack/node";
 import { handle } from "frog/next";
 import { serveStatic } from "frog/serve-static";
+import { FC } from "react";
+
+const Intro = () => {
+  return (
+    <Box
+      grow
+      alignHorizontal="center"
+      backgroundColor="background"
+      backgroundImage="url('http://localhost:3000/into.png')"
+      backgroundSize="contain"
+      padding="32"
+      fontWeight="700"
+      textAlign="center"
+      paddingTop="60"
+    >
+      <VStack gap="12">
+        <Text size={{ custom: "90px" }} color="red" align="center">
+          YOINK OF WAR
+        </Text>
+        <Text size={{ custom: "60px" }} align="center">
+          Challenge your friend lorem ipsum dolor sit amet
+        </Text>
+      </VStack>
+    </Box>
+  );
+};
+
+const Battle = () => {
+  return (
+    <Box
+      grow
+      alignHorizontal="center"
+      backgroundColor="background"
+      backgroundImage="url('http://localhost:3000/battle.png')"
+      backgroundSize="contain"
+      padding="32"
+      fontWeight="700"
+    >
+      <VStack gap="4">
+        <Text size={{ custom: "50px" }} align="center">
+          CURRENTLY WINNING
+        </Text>
+        <Text size={{ custom: "90px" }} color="red" align="center">
+          Your team
+        </Text>
+
+        <div
+          style={{
+            display: "flex",
+            marginTop: "100px",
+            justifyContent: "space-between",
+            width: "660px",
+            alignSelf: "center",
+          }}
+        >
+          <Text size={{ custom: "50px" }} color="red">
+            2 mates
+          </Text>
+          <Text size={{ custom: "50px" }} color="red">
+            3 mates
+          </Text>
+        </div>
+
+        <div
+          style={{
+            display: "flex",
+            marginTop: "300px",
+            justifyContent: "space-between",
+            width: "800px",
+            textAlign: "center",
+            alignSelf: "center",
+          }}
+        >
+          <div
+            style={{
+              border: "6px solid black",
+              background: "white",
+              borderRadius: "18px",
+              display: "flex",
+              flexDirection: "column",
+              minWidth: "320px",
+            }}
+          >
+            <Text size={{ custom: "50px" }} align="center">
+              123
+            </Text>
+            <Text size={{ custom: "50px" }} align="center">
+              $YOINK
+            </Text>
+          </div>
+          <div
+            style={{
+              border: "6px solid black",
+              background: "white",
+              borderRadius: "18px",
+              display: "flex",
+              flexDirection: "column",
+              minWidth: "320px",
+            }}
+          >
+            <Text size={{ custom: "50px" }} align="center">
+              123
+            </Text>
+            <Text size={{ custom: "50px" }} align="center">
+              $YOINK
+            </Text>
+          </div>
+        </div>
+      </VStack>
+    </Box>
+  );
+};
+
+interface ErrorProps {
+  title: string;
+  content: string;
+}
+
+const Error: FC<ErrorProps> = ({ title, content }) => {
+  return (
+    <Box
+      grow
+      alignHorizontal="center"
+      backgroundColor="background"
+      padding="32"
+    >
+      <VStack gap="4">
+        <Heading>{title}</Heading>
+        <Text size={{ custom: "50px" }}>{content}</Text>
+      </VStack>
+    </Box>
+  );
+};
+
+interface StreamProps {
+  flowRate: number;
+  title: string;
+}
+
+const Stream: FC<StreamProps> = ({ flowRate, title }) => {
+  return (
+    <Box
+      grow
+      alignHorizontal="center"
+      backgroundColor="background"
+      backgroundImage="url('http://localhost:3000/yoink.png')"
+      backgroundSize="cover"
+      padding="48"
+      fontWeight="700"
+      textAlign="center"
+    >
+      <VStack gap="16" alignHorizontal="center">
+        <Text size={{ custom: "50px" }}>{title}</Text>
+
+        <div style={{ display: "flex", width: "624px" }}>
+          <Text size={{ custom: "60px" }} color="red">
+            Stream as many $YOINK as possible to win the war
+          </Text>
+        </div>
+        <div
+          style={{
+            border: "8px solid black",
+            background: "white",
+            borderRadius: "16px",
+            paddingBottom: "34px",
+            textAlign: "center",
+            width: "600px",
+            display: "flex",
+            flexDirection: "column",
+            alignItems: "center",
+            marginTop: "100px",
+          }}
+        >
+          <Text size={{ custom: "200px" }}>{flowRate}</Text>
+          <Text size={{ custom: "40px" }} color="red">
+            YOINK / hour
+          </Text>
+        </div>
+      </VStack>
+    </Box>
+  );
+};
 
 init(process.env.AIRSTACK_API_KEY!);
 
 type State = {
   team?: string;
   flowRate: number;
-  teams: [AirStackUser, AirStackUser];
+  teams: [AirStackUser, AirStackUser] | [];
 };
 
 const app = new Frog<{ State: State }>({
@@ -49,26 +226,52 @@ const app = new Frog<{ State: State }>({
 // export const runtime = 'edge'
 
 app.frame("/", async (c) => {
-  const { inputText, frameData } = c;
+  const { inputText, frameData, buttonValue, deriveState } = c;
 
   const challengerHandle = inputText;
 
-  if (!challengerHandle) {
+  const state = await deriveState(async (previousState) => {
+    switch (buttonValue) {
+      case "reset":
+        previousState.teams = [];
+        previousState.flowRate = 1;
+        break;
+      case "inc":
+        previousState.flowRate++;
+        break;
+      case "dec":
+        previousState.flowRate = Math.max(1, previousState.flowRate - 1);
+        break;
+    }
+
+    if (challengerHandle && previousState.teams.length !== 2) {
+      const teamsData = await fetchPlayers(
+        frameData?.fid?.toString(),
+        challengerHandle
+      );
+
+      if (!teamsData.includes(undefined)) {
+        previousState.teams = teamsData as [AirStackUser, AirStackUser];
+      }
+    }
+  });
+
+  console.log({ state });
+
+  if (state.teams.length !== 2) {
     return c.res({
       image: <Intro />,
       intents: [
         <TextInput placeholder="Enter challenger handle..." />,
         <Button>Challenge!</Button>,
+        <Button action="/info">Game Info!</Button>,
       ],
     });
   }
 
-  const [myData, opponentData] = await fetchPlayers(
-    frameData?.fid?.toString(),
-    challengerHandle
-  );
+  const [myData, opponentData] = state.teams;
 
-  if (!myData?.userId || !opponentData?.userId) {
+  if (!myData || !opponentData) {
     return c.res({
       image: (
         <Error
@@ -82,26 +285,52 @@ app.frame("/", async (c) => {
 
   return c.res({
     image: (
-      <Challenge
-        handle1={myData.profileHandle || ""}
-        handle2={opponentData.profileHandle || ""}
+      <Stream
+        flowRate={state.flowRate}
+        title={`CHALLENGING @${opponentData.profileHandle}`.toUpperCase()}
       />
     ),
     intents: [
-      <Button action={`/battle/${myData.userId}:${opponentData.userId}`}>
-        Start first Yoink
-      </Button>,
+      <Button value="inc">+</Button>,
+      <Button value="dec">-</Button>,
+      <Button value="3">Start stream</Button>,
+      <Button value="reset">Back</Button>,
+      // <Button action={`/battle/${myData.userId}:${opponentData.userId}`}>
+      //   Start first Yoink
+      // </Button>,
       // TODO: This link will be urlencoded and "&" will turn to &amp;.
-      <Button.Link
-        href={buildShareUrl(
-          opponentData.profileHandle,
-          `${myData.userId}:${opponentData.userId}`
-        )}
-      >
-        Cast battle!
-      </Button.Link>,
-      <Button.Reset>Back</Button.Reset>,
+      // <Button.Link
+      //   href={buildShareUrl(
+      //     opponentData.profileHandle,
+      //     `${myData.userId}:${opponentData.userId}`
+      //   )}
+      // >
+      //   Cast battle!
+      // </Button.Link>,
+      // <Button.Reset>Back</Button.Reset>,
     ],
+  });
+});
+
+app.frame("/info", (c) => {
+  return c.res({
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        backgroundImage="url('http://localhost:3000/yoink.png')"
+        backgroundSize="cover"
+        padding="48"
+        fontWeight="700"
+        textAlign="center"
+      >
+        <VStack gap="16" alignHorizontal="center">
+          <Text size={{ custom: "50px" }}>GAME INFO</Text>
+        </VStack>
+      </Box>
+    ),
+    intents: [<Button.Reset>Back!</Button.Reset>],
   });
 });
 
@@ -182,7 +411,7 @@ app.frame("/battle/:battleid", async (c) => {
     }
 
     return c.res({
-      image: <Stream flowRate={state.flowRate} />,
+      image: <Stream title="HELP YOUR FREN" flowRate={state.flowRate} />,
       intents: [
         <Button value="inc">+</Button>,
         <Button value="dec">-</Button>,
