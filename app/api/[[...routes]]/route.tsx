@@ -11,13 +11,19 @@ import {
   fetchPlayers,
   fetchPlayersByFID,
 } from "@/app/utils/AirStackUtils";
-import { buildShareUrl } from "@/app/utils/WarpcastUtils";
 import { init } from "@airstack/node";
 import { handle } from "frog/next";
 import { serveStatic } from "frog/serve-static";
 import { FC } from "react";
 
-const Intro = () => {
+interface IntroProps {
+  title: string;
+  description: string;
+  player1?: string;
+  player2?: string;
+}
+
+const Intro: FC<IntroProps> = ({ title, description, player1, player2 }) => {
   return (
     <Box
       grow
@@ -30,14 +36,67 @@ const Intro = () => {
       textAlign="center"
       paddingTop="60"
     >
-      <VStack gap="12">
-        <Text size={{ custom: "90px" }} color="red" align="center">
-          YOINK OF WAR
-        </Text>
-        <Text size={{ custom: "60px" }} align="center">
-          Challenge your friend lorem ipsum dolor sit amet
-        </Text>
-      </VStack>
+      <div style={{ display: "flex" }}>
+        <VStack gap="12">
+          <Text size={{ custom: "90px" }} color="red" align="center">
+            {title}
+          </Text>
+          <Text size={{ custom: "60px" }} align="center">
+            {description}
+          </Text>
+        </VStack>
+
+        {player1 && (
+          <div
+            style={{
+              position: "absolute",
+              top: "315px",
+              left: "50px",
+              color: vars.colors.red,
+              fontSize: "40px",
+            }}
+          >
+            {player1}
+          </div>
+        )}
+        {player1 && (
+          <img
+            src="http://localhost:3000/arrow-left.svg"
+            style={{
+              position: "absolute",
+              height: "72px",
+              top: "350px",
+              left: "0px",
+            }}
+          />
+        )}
+
+        {player2 && (
+          <div
+            style={{
+              position: "absolute",
+              top: "440px",
+              right: "120px",
+              color: vars.colors.red,
+              fontSize: "40px",
+            }}
+          >
+            {player2}
+          </div>
+        )}
+
+        {player2 && (
+          <img
+            src="http://localhost:3000/arrow-right.svg"
+            style={{
+              position: "absolute",
+              height: "72px",
+              top: "480px",
+              right: "60px",
+            }}
+          />
+        )}
+      </div>
     </Box>
   );
 };
@@ -228,6 +287,8 @@ const app = new Frog<{ State: State }>({
 app.frame("/", async (c) => {
   const { inputText, frameData, buttonValue, deriveState } = c;
 
+  console.log({ frameData });
+
   const challengerHandle = inputText;
 
   const state = await deriveState(async (previousState) => {
@@ -256,11 +317,16 @@ app.frame("/", async (c) => {
     }
   });
 
-  console.log({ state });
-
   if (state.teams.length !== 2) {
     return c.res({
-      image: <Intro />,
+      image: (
+        <Intro
+          title="YOINK OF WAR"
+          description="Challenge your friend lorem ipsum dolor sit amet"
+          // player1="@magicmikk"
+          // player2="IT's YOU"
+        />
+      ),
       intents: [
         <TextInput placeholder="Enter challenger handle..." />,
         <Button>Challenge!</Button>,
@@ -293,7 +359,9 @@ app.frame("/", async (c) => {
     intents: [
       <Button value="inc">+</Button>,
       <Button value="dec">-</Button>,
-      <Button value="3">Start stream</Button>,
+      <Button action={`/share/${myData.userId}:${opponentData.userId}`}>
+        Start Stream
+      </Button>,
       <Button value="reset">Back</Button>,
       // <Button action={`/battle/${myData.userId}:${opponentData.userId}`}>
       //   Start first Yoink
@@ -308,6 +376,66 @@ app.frame("/", async (c) => {
       //   Cast battle!
       // </Button.Link>,
       // <Button.Reset>Back</Button.Reset>,
+    ],
+  });
+});
+
+app.frame("/share/:battleid", (c) => {
+  const { buttonValue, status, deriveState, frameData, env, req, verified } = c;
+
+  const { battleid } = req.param();
+  const [player1, player2] = battleid.split(":");
+
+  return c.res({
+    image: (
+      <Box
+        grow
+        alignHorizontal="center"
+        backgroundColor="background"
+        backgroundImage="url('http://localhost:3000/yoink.png')"
+        backgroundSize="cover"
+        padding="48"
+        fontWeight="700"
+        textAlign="center"
+      >
+        <VStack gap="16" alignHorizontal="center">
+          <Text size={{ custom: "50px" }}>YOU'VE BEEN CHALLENGED</Text>
+          <Text size={{ custom: "60px" }} color="red">
+            @Mikk challenged you to a{/* You have challenged ... to a */}
+          </Text>
+          <Text size={{ custom: "60px" }} color="red">
+            $YOINK battle!
+          </Text>
+          <div
+            style={{
+              border: "8px solid black",
+              background: "white",
+              borderRadius: "16px",
+              padding: "34px",
+              textAlign: "center",
+              width: "750px",
+              display: "flex",
+              flexDirection: "column",
+              alignItems: "center",
+              marginTop: "60px",
+            }}
+          >
+            <Text size={{ custom: "60px" }}>
+              Accept the challenge by yoinking more than him. Invite your mates
+              to yoink on your side and win together.
+            </Text>
+            <div style={{ display: "flex", marginTop: "20px" }}>
+              <Text size={{ custom: "40px" }} color="red">
+                @Mikk yoinked 12345 times
+              </Text>
+            </div>
+          </div>
+        </VStack>
+      </Box>
+    ),
+    intents: [
+      <Button action={`/battle/${battleid}`}>Share!</Button>,
+      <Button action="/">Back!</Button>,
     ],
   });
 });
@@ -327,6 +455,15 @@ app.frame("/info", (c) => {
       >
         <VStack gap="16" alignHorizontal="center">
           <Text size={{ custom: "50px" }}>GAME INFO</Text>
+          <div style={{ display: "flex" }}>
+            <Text>1. Challenge your friend to a $YOINK battle.</Text>
+            <Text>2. Stream as many $YOINK as possible to win the war. </Text>
+            <Text>3. The team with the most $YOINK wins. </Text>
+            <Text>
+              4. The winning team will claim all of the YOINK tokens spent in
+              the game.
+            </Text>
+          </div>
         </VStack>
       </Box>
     ),
@@ -355,9 +492,11 @@ app.frame("/battle/:battleid", async (c) => {
     switch (buttonValue) {
       case "team1":
         previousState.team = player1;
+        previousState.flowRate = 1;
         break;
       case "team2":
         previousState.team = player2;
+        previousState.flowRate = 1;
         break;
       case "reset":
         previousState.team = undefined;
@@ -415,7 +554,7 @@ app.frame("/battle/:battleid", async (c) => {
       intents: [
         <Button value="inc">+</Button>,
         <Button value="dec">-</Button>,
-        <Button value="3">Start stream</Button>,
+        <Button action="/end">Start stream</Button>,
         <Button value="reset">Back</Button>,
       ],
     });
@@ -423,9 +562,28 @@ app.frame("/battle/:battleid", async (c) => {
 
   return c.res({
     image: <Battle />,
-    intents: state.teams.map((team, index) => (
-      <Button value={`team${index + 1}`}>Join @{team.profileHandle}</Button>
-    )),
+    intents: [
+      <Button value="team1">Join @{state.teams[0].profileHandle}</Button>,
+      <Button action="/info">Game Info</Button>,
+      <Button value="team2">Join @{state.teams[1].profileHandle}</Button>,
+    ],
+  });
+});
+
+app.frame("/end", (c) => {
+  return c.res({
+    image: (
+      <Intro
+        title="YOUR TEAM GOT REKT"
+        description="Enemy team will claim all of your YOINK tokens spent in the game."
+        player2="IT'S YOU"
+      />
+    ),
+    intents: [
+      <Button action="/" value="reset">
+        New Game
+      </Button>,
+    ],
   });
 });
 
